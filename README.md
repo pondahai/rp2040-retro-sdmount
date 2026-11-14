@@ -15,7 +15,31 @@
 > ⚠️ 需要**同時更新載入器**（rp2040-retro-loader 的 `RETRO_MSG_SHOW_MENU` 支援）。舊載入器上按 START
 > 或送 `done` 會直接重新進入本 APP，而不是回選單；這時按實體 RESET 一樣能回去。
 
-## 用法
+## 最快的用法：retro-sync
+
+掌機停在載入器選單、USB 接著電腦，一行就好：
+
+```bash
+pip install pyserial hidapi
+python host/retro_sync.py push RetroFoo.uf2
+```
+
+它會自動：叫載入器啟動 SDMOUNT → 等磁碟出現 → 複製（`.uf2` 旁邊同名的 `.RAW` 封面會一起帶上）
+→ 退出磁碟 → 讓掌機回選單。新 APP 馬上就在選單裡。
+
+| 指令 | 作用 |
+| :--- | :--- |
+| `push <檔案...>` | 全流程 |
+| `mount` | 只掛載，印出磁碟位置（之後自己複製） |
+| `finish` | 退出磁碟並讓掌機回選單 |
+| `status` | 掌機目前在載入器選單、SDMOUNT，或找不到 |
+
+- 需要新版載入器（rp2040-retro-loader 的 USB 指令通道，§4.3）。
+- 磁碟機代號自動偵測只支援 **Windows**（靠 SDMOUNT 的 SCSI 名稱 `RETRO SD Mount` 找）；
+  其他系統用 `--drive /media/...` 指定掛載點，並自己退出磁碟後再 `finish`。
+- 掌機正在跑別的 APP 時找不到它（只有載入器選單與 SDMOUNT 有開 USB），先按 RESET 回選單。
+
+## 手動用法
 
 1. 把 `SDMOUNT.UF2` 與 `SDMOUNT.RAW` 放進 SD 卡**根目錄**（第一次只能用讀卡機放）
 2. 開機 → 選單選 **SDMOUNT** → A
