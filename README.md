@@ -9,7 +9,7 @@
 在 [rp2040-retro-loader](https://github.com/pondahai/rp2040-retro-loader) 的選單裡是一個普通項目。
 設計見 [rp2040-retro-sdk `docs/SD-MOUNT-PLAN.md`](https://github.com/pondahai/rp2040-retro-sdk/blob/main/docs/SD-MOUNT-PLAN.md)。
 
-> 🚧 **S1 階段**：只有隨身碟功能，回選單靠實體 RESET。尚未上機驗證。
+> **S1 階段**：只有隨身碟功能，回選單靠實體 RESET。✅ 2026-11-14 上機驗證通過（從載入器選單啟動、電腦掛載、複製、退出、RESET 回選單）。
 
 ## 用法
 
