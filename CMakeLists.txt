@@ -34,15 +34,25 @@ add_executable(retro_sdmount
     vendor/lcd.c
 )
 
+# 載入器 repo:取 common/boot_map.h(RETRO_MSG_* 回選單訊息)、連結腳本與跳板。
+# 兩種編譯都需要 —— 回選單訊息的格式只定義在載入器那邊,不在這裡複製一份。
+set(LOADER_PATH "${CMAKE_CURRENT_LIST_DIR}/../rp2040-retro-loader"
+    CACHE PATH "rp2040-retro-loader 的路徑")
+if(NOT EXISTS "${LOADER_PATH}/common/boot_map.h")
+    message(FATAL_ERROR "找不到 ${LOADER_PATH}/common/boot_map.h，請用 -DLOADER_PATH=<路徑> 指定。")
+endif()
+
 target_include_directories(retro_sdmount PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/src        # tusb_config.h 要在這裡被找到
     ${CMAKE_CURRENT_LIST_DIR}/vendor
+    ${LOADER_PATH}/common
 )
 
 target_link_libraries(retro_sdmount
     pico_stdlib
     pico_unique_id
     hardware_spi
+    hardware_watchdog
     tinyusb_device
     sdcard
 )
@@ -93,9 +103,6 @@ endif()
 option(LOADER_OFFSET_BUILD "Link at 0x10004000 for use with rp2040-retro-loader" OFF)
 
 if(LOADER_OFFSET_BUILD)
-    set(LOADER_PATH "${CMAKE_CURRENT_LIST_DIR}/../rp2040-retro-loader"
-        CACHE PATH "rp2040-retro-loader 的路徑")
-
     set(LOADER_APP_LD "${LOADER_PATH}/app/memmap_app.ld")
     if(NOT EXISTS "${LOADER_APP_LD}")
         message(FATAL_ERROR "找不到 ${LOADER_APP_LD}，請用 -DLOADER_PATH=<路徑> 指定。")

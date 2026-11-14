@@ -1,4 +1,4 @@
-/* USB 描述元:單一 MSC 介面。
+/* USB 描述元:複合裝置 = CDC 序列埠(收指令)+ MSC(SD 卡)。
  *
  * VID/PID 是 TinyUSB 範例用的開發測試碼(0xCAFE)。公開散布前要換成
  * 正式的 —— 可以向 Raspberry Pi 免費申請一個 PID(見 SD-MOUNT-PLAN.md §6)。 */
@@ -7,23 +7,27 @@
 #include "pico/unique_id.h"
 
 #define USB_VID   0xCAFE
-#define USB_PID   0x4003
+#define USB_PID   0x4004   /* S1 是 0x4003(只有 MSC);介面變了就換 PID,免得 Windows 套用舊的驅動快取 */
 #define USB_BCD   0x0200
 
-enum { ITF_NUM_MSC, ITF_NUM_TOTAL };
+enum { ITF_NUM_CDC, ITF_NUM_CDC_DATA, ITF_NUM_MSC, ITF_NUM_TOTAL };
 
-#define EPNUM_MSC_OUT   0x01
-#define EPNUM_MSC_IN    0x81
+#define EPNUM_CDC_NOTIF 0x81
+#define EPNUM_CDC_OUT   0x02
+#define EPNUM_CDC_IN    0x82
+#define EPNUM_MSC_OUT   0x03
+#define EPNUM_MSC_IN    0x83
 
-#define CONFIG_TOTAL_LEN  (TUD_CONFIG_DESC_LEN + TUD_MSC_DESC_LEN)
+#define CONFIG_TOTAL_LEN  (TUD_CONFIG_DESC_LEN + TUD_CDC_DESC_LEN + TUD_MSC_DESC_LEN)
 
 static const tusb_desc_device_t desc_device = {
     .bLength            = sizeof(tusb_desc_device_t),
     .bDescriptorType    = TUSB_DESC_DEVICE,
     .bcdUSB             = USB_BCD,
-    .bDeviceClass       = 0x00,     /* 由介面決定 */
-    .bDeviceSubClass    = 0x00,
-    .bDeviceProtocol    = 0x00,
+    /* 有 CDC 就要用 IAD,Windows 才會把兩個 CDC 介面綁成一個 COM 埠 */
+    .bDeviceClass       = TUSB_CLASS_MISC,
+    .bDeviceSubClass    = MISC_SUBCLASS_COMMON,
+    .bDeviceProtocol    = MISC_PROTOCOL_IAD,
     .bMaxPacketSize0    = CFG_TUD_ENDPOINT0_SIZE,
     .idVendor           = USB_VID,
     .idProduct          = USB_PID,
@@ -41,7 +45,8 @@ const uint8_t *tud_descriptor_device_cb(void)
 
 static const uint8_t desc_configuration[] = {
     TUD_CONFIG_DESCRIPTOR(1, ITF_NUM_TOTAL, 0, CONFIG_TOTAL_LEN, 0x00, 100),
-    TUD_MSC_DESCRIPTOR(ITF_NUM_MSC, 0, EPNUM_MSC_OUT, EPNUM_MSC_IN, 64),
+    TUD_CDC_DESCRIPTOR(ITF_NUM_CDC, 4, EPNUM_CDC_NOTIF, 8, EPNUM_CDC_OUT, EPNUM_CDC_IN, 64),
+    TUD_MSC_DESCRIPTOR(ITF_NUM_MSC, 5, EPNUM_MSC_OUT, EPNUM_MSC_IN, 64),
 };
 
 const uint8_t *tud_descriptor_configuration_cb(uint8_t index)
@@ -56,6 +61,8 @@ static const char *const string_desc[] = {
     "rp2040-retro",     /* 1: 製造商 */
     "Retro SD Mount",   /* 2: 產品 */
     NULL,               /* 3: 序號,執行期產生 */
+    "Retro SD Control", /* 4: CDC 介面 */
+    "Retro SD Card",    /* 5: MSC 介面 */
 };
 
 static uint16_t desc_str[33];

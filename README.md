@@ -9,7 +9,11 @@
 在 [rp2040-retro-loader](https://github.com/pondahai/rp2040-retro-loader) 的選單裡是一個普通項目。
 設計見 [rp2040-retro-sdk `docs/SD-MOUNT-PLAN.md`](https://github.com/pondahai/rp2040-retro-sdk/blob/main/docs/SD-MOUNT-PLAN.md)。
 
-> **S1 階段**：只有隨身碟功能，回選單靠實體 RESET。✅ 2026-11-14 上機驗證通過（從載入器選單啟動、電腦掛載、複製、退出、RESET 回選單）。
+> **S2 階段**：USB 隨身碟 + 序列埠指令，電腦送 `done` 或掌機按 START 就回選單。🚧 S2 尚未上機驗證。
+> （S1：只有隨身碟、RESET 回選單 —— ✅ 2026-11-14 上機驗證通過）
+>
+> ⚠️ 需要**同時更新載入器**（rp2040-retro-loader 的 `RETRO_MSG_SHOW_MENU` 支援）。舊載入器上按 START
+> 或送 `done` 會直接重新進入本 APP，而不是回選單；這時按實體 RESET 一樣能回去。
 
 ## 用法
 
@@ -18,7 +22,22 @@
 3. USB 線接電腦，電腦會出現一個磁碟，就是 SD 卡
 4. 複製檔案
 5. **先在電腦上「退出」那個磁碟**，掌機畫面變成 `EJECTED / Safe to remove`
-6. 按掌機的 **RESET** → 回到選單，剛放進去的 APP 已經在裡面
+6. 回選單，三選一：
+   - 掌機按 **START**
+   - 電腦送 `done`：`python tools/sdmount_cli.py done`（需要 `pip install pyserial`）
+   - 按實體 **RESET**
+
+   還沒退出時，START 與 `done` 都會被拒絕（畫面提示先退出），免得 FAT 寫到一半。
+
+### 序列埠指令
+
+USB 同時出現一個序列埠（VID:PID `CAFE:4004`）。一行一個指令：
+
+| 指令 | 回覆 |
+| :--- | :--- |
+| `ping` | `retro-sdmount S2` |
+| `status` | `state=<no-card\|waiting\|mounted\|ejected\|unplugged> card=<0\|1> mb=<容量> r=<KB> w=<KB> err=<次數>` |
+| `done` | 已退出：`ok`，接著回選單；還掛著：`error: eject the drive first` |
 
 畫面狀態：
 
@@ -27,7 +46,7 @@
 | `SD: NOT FOUND` | 沒插卡或卡壞了；電腦會看到一台「沒插卡」的讀卡機 |
 | `USB: WAITING FOR PC...` | 還沒接電腦 |
 | `USB: CONNECTED` | 電腦已掛載，可以複製 |
-| `USB: EJECTED` | 電腦已退出，可以按 RESET |
+| `USB: EJECTED` | 電腦已退出，可以按 START 回選單 |
 | `USB: CABLE UNPLUGGED` | 沒退出就拔線了 —— 資料多半已寫入，但不保證 |
 | `R ... KB  W ... KB` | 累計讀寫量；出現 `ERR` 表示有磁區讀寫失敗 |
 
@@ -35,7 +54,9 @@
 
 - **不開檔案系統**：掌機只把 SCSI 讀寫轉成 SD 磁區讀寫（`sdcard.c` 的 `disk_read` / `disk_write`），
   FAT 完全由電腦管。兩邊同時改 FAT 卡就會壞。
-- **USB 只有 MSC**（TinyUSB）。S2 會加 CDC 序列埠，讓電腦端送「完成」後自動回選單。
+- **USB 複合裝置**（TinyUSB）：MSC + CDC 序列埠。
+- **回選單用載入器的跨重置訊息**：軟體重置前在 `watchdog_hw->scratch[0]` 寫 `RETRO_MSG_SHOW_MENU`
+  （定義在 rp2040-retro-loader `common/boot_map.h`，編譯時直接 include 那一份）。
 - **不掃鍵盤**，但會把 595 的 LATCH（GPIO 14）停在高 —— 現行接線下鍵盤 CLOCK 與 LCD D/C 共用，
   LATCH 浮接的話鍵盤 LED 會亂閃。
 - 速度受限於 USB 1.1 全速，實際約 0.8～1 MB/s。
@@ -67,7 +88,7 @@ ninja -C build_offset
 
 ## 已知事項
 
-- USB VID/PID 是開發測試碼 `0xCAFE:0x4003`，公開散布前要換正式的。
+- USB VID/PID 是開發測試碼 `0xCAFE:0x4004`（S1 是 `0x4003`），公開散布前要換正式的。
 - 封面只有 11 色，比 [ICON-STYLE.md](https://github.com/pondahai/rp2040-retro-handheld/blob/main/docs/ICON-STYLE.md) 建議的少，之後可以加明暗。
 
 ## 授權
