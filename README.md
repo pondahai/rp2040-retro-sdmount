@@ -9,7 +9,7 @@
 在 [rp2040-retro-loader](https://github.com/pondahai/rp2040-retro-loader) 的選單裡是一個普通項目。
 設計見 [rp2040-retro-sdk `docs/SD-MOUNT-PLAN.md`](https://github.com/pondahai/rp2040-retro-sdk/blob/main/docs/SD-MOUNT-PLAN.md)。
 
-> **S2 階段**：USB 隨身碟 + 序列埠指令，電腦送 `done` 或掌機按 START 就回選單。🚧 S2 尚未上機驗證。
+> **S2 階段**：USB 隨身碟 + 序列埠指令，電腦送 `done` 或掌機按 START 就回選單。✅ 2026-11-14 上機驗證通過。
 > （S1：只有隨身碟、RESET 回選單 —— ✅ 2026-11-14 上機驗證通過）
 >
 > ⚠️ 需要**同時更新載入器**（rp2040-retro-loader 的 `RETRO_MSG_SHOW_MENU` 支援）。舊載入器上按 START
