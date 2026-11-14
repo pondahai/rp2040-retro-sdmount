@@ -4,6 +4,8 @@
     python retro_sync.py mount                             # 只掛載，印出磁碟位置
     python retro_sync.py finish                            # 退出磁碟並讓掌機回選單
     python retro_sync.py status                            # 看掌機現在在哪個狀態
+    python retro_sync.py run DOOM                          # 叫停在選單的載入器啟動 SD 卡上的 DOOM.UF2
+    python retro_sync.py push RetroFoo.uf2 --run           # push 完直接啟動它
 
 push 的流程：
   1. 掌機停在載入器選單 -> 透過 USB HID 叫它啟動 SDMOUNT（rp2040-retro-loader §4.3）
@@ -51,18 +53,44 @@ def loader_present():
     return bool(hid.enumerate(LOADER_VID, LOADER_PID))
 
 
-def loader_cmd(cmd):
-    """送一個指令字元給停在選單的載入器，回傳 4 byte 的回覆標籤。"""
+LOADER_OUT_LEN = 32     # 協定 2 的 output report；協定 1（舊載入器）是 8
+
+
+def _loader_xfer(body, report_len):
     dev = hid.device()
     dev.open(LOADER_VID, LOADER_PID)
     try:
-        dev.write(b"\x00" + cmd + b"\x00" * 7)
-        data = bytes(dev.read(8, timeout_ms=2000))
+        if dev.write(bytes(1) + body.ljust(report_len, bytes(1))) < 0:
+            return b""
+        return bytes(dev.read(8, timeout_ms=1500))
     finally:
         dev.close()
+
+
+def loader_cmd(cmd, arg=b""):
+    """送一個指令字元（加參數）給停在選單的載入器，回傳 4 byte 的回覆標籤。"""
+    if len(arg) > LOADER_OUT_LEN - 2:
+        raise SyncError(f"檔名太長（最多 {LOADER_OUT_LEN - 2} 字元）")
+    body = cmd + arg
+    data = _loader_xfer(body, LOADER_OUT_LEN)
+    if not data:
+        # 舊載入器（協定 1）的 report 只有 8 byte，收不到較長的 report
+        if arg:
+            raise SyncError("載入器沒有回覆（可能是不支援 run 的舊版載入器，請更新 rp2040-retro-loader）")
+        data = _loader_xfer(body, 8)
     if not data:
         raise SyncError("載入器沒有回覆")
     return data[:4]
+
+
+def loader_run(name):
+    """叫載入器燒錄並執行 SD 卡上的 name（可省略 .uf2）。"""
+    tag = loader_cmd(b"L", name.encode("ascii"))
+    if tag == b"NONE":
+        raise SyncError(f"SD 卡上沒有 {name}")
+    if tag != b"OK  ":
+        raise SyncError(f"載入器回了看不懂的東西：{tag!r}")
+    log(f"載入器回應 OK，開始燒錄並執行 {name}。")
 
 
 # ------------------------------------------------------------ SDMOUNT（CDC）
@@ -221,6 +249,20 @@ def cmd_push(args):
         with open(dst, "rb+") as fh:        # 確保寫進裝置，不是只在快取裡
             os.fsync(fh.fileno())
     finish(drive)
+    if args.run:
+        uf2s = [f for f in args.files if f.lower().endswith(".uf2")]
+        if not uf2s:
+            raise SyncError("--run 需要至少一個 .uf2")
+        wait_for(loader_present, 30, "掌機回到載入器選單")
+        time.sleep(0.5)     # 等選單畫完、USB 列舉完成
+        loader_run(os.path.basename(uf2s[0]))
+
+
+def cmd_run(args):
+    if not loader_present():
+        raise SyncError("找不到載入器。掌機必須停在載入器選單"
+                        "（正在跑其他 APP 時請先按 RESET）。")
+    loader_run(args.name)
 
 
 def cmd_mount(args):
@@ -254,7 +296,11 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
     p = sub.add_parser("push", help="掛載、複製、退出、回選單")
     p.add_argument("files", nargs="+")
+    p.add_argument("--run", action="store_true", help="完成後直接啟動第一個 .uf2")
     p.set_defaults(fn=cmd_push)
+    p = sub.add_parser("run", help="叫載入器啟動 SD 卡上的某個 APP")
+    p.add_argument("name", help="SD 卡上的檔名，例如 DOOM.UF2 或 DOOM")
+    p.set_defaults(fn=cmd_run)
     sub.add_parser("mount", help="只掛載，印出磁碟位置").set_defaults(fn=cmd_mount)
     sub.add_parser("finish", help="退出磁碟並讓掌機回選單").set_defaults(fn=cmd_finish)
     sub.add_parser("status", help="顯示掌機目前狀態").set_defaults(fn=cmd_status)
